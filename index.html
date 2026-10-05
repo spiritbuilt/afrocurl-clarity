@@ -191,6 +191,7 @@ label{display:block;font-size:13px;font-weight:500;color:var(--text2);margin-bot
   .petals-grid{grid-template-columns:1fr}
 }
 </style>
+<script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.20.0/umd/index.min.js"></script>
 </head>
 <body>
 
@@ -362,12 +363,18 @@ function renderScanner(){
       <div class="form-hint">AI will find the product and fetch its full ingredient list automatically</div>`;
   } else if(state.scanTab==='barcode'){
     tabContent = `
-      <label>Enter barcode number</label>
-      <div style="display:flex;gap:8px;margin-top:6px">
-        <input type="text" id="barcodeInput" placeholder="e.g. 764302246288" inputmode="numeric"/>
+      <label>Scan or enter barcode</label>
+      <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap">
+        <input type="text" id="barcodeInput" placeholder="e.g. 764302246288" inputmode="numeric" style="flex:1;min-width:160px"/>
         <button class="btn-primary btn-sm" onclick="doBarcodeSearch()">Search</button>
+        <button class="btn-outline btn-sm" style="color:var(--indigo);border-color:var(--indigo)" onclick="startBarcodeCamera()">📷 Scan</button>
       </div>
-      <div class="form-hint">Enter the barcode number shown under the barcode lines on the packaging</div>`;
+      <div id="barcodeCameraWrap" style="display:none;margin-top:12px;position:relative">
+        <video id="barcodeVideo" style="width:100%;border-radius:10px;background:#000" playsinline autoplay></video>
+        <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:70%;height:2px;background:var(--mauve);opacity:.7;pointer-events:none"></div>
+        <button class="btn-outline btn-sm" style="margin-top:8px;color:var(--text2);border-color:var(--border)" onclick="stopBarcodeCamera()">Cancel</button>
+      </div>
+      <div class="form-hint">Point camera at barcode or type the number from the packaging</div>`;
   } else {
     tabContent = `
       <div class="photo-zone" id="photoZone" onclick="triggerPhotoInput()">
@@ -476,62 +483,102 @@ async function doNameSearch(){
 }
 
 // ---- BARCODE SEARCH ----
+// ---- BARCODE CAMERA ----
+let barcodeReader = null;
+async function startBarcodeCamera(){
+  const wrap = document.getElementById('barcodeCameraWrap');
+  const video = document.getElementById('barcodeVideo');
+  if(!wrap||!video) return;
+  wrap.style.display = 'block';
+  try{
+    if(typeof ZXing === 'undefined'){ alert('Barcode scanner not loaded. Please type the number instead.'); return; }
+    const hints = new Map();
+    const formats = [
+      ZXing.BarcodeFormat.EAN_13, ZXing.BarcodeFormat.EAN_8,
+      ZXing.BarcodeFormat.UPC_A, ZXing.BarcodeFormat.UPC_E,
+      ZXing.BarcodeFormat.CODE_128, ZXing.BarcodeFormat.CODE_39
+    ];
+    hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, formats);
+    barcodeReader = new ZXing.BrowserMultiFormatReader(hints);
+    await barcodeReader.decodeFromVideoDevice(null, video, (result, err) => {
+      if(result){
+        stopBarcodeCamera();
+        const input = document.getElementById('barcodeInput');
+        if(input){ input.value = result.getText(); }
+        doBarcodeSearch();
+      }
+    });
+  } catch(e){
+    wrap.style.display = 'none';
+    alert('Camera not available. Please type the barcode number instead.');
+  }
+}
+function stopBarcodeCamera(){
+  if(barcodeReader){ try{ barcodeReader.reset(); }catch(e){} barcodeReader=null; }
+  const wrap = document.getElementById('barcodeCameraWrap');
+  if(wrap) wrap.style.display = 'none';
+}
+
 async function doBarcodeSearch(){
   const q = (document.getElementById('barcodeInput')||{}).value||'';
   if(!q.trim()) return;
+  stopBarcodeCamera();
   state.scanStatus = 'scanning';
   state.scanMsg = 'Looking up barcode...';
   state.scanResult = null;
   render();
-  // Try Open Beauty Facts first for barcode
+
+  // Helper: once we have name+brand, fetch ingredients via AI
+  async function fetchIngredientsByName(name, brand){
+    state.scanMsg = `Found "${name}" — fetching ingredient list...`;
+    state.scanStatus = 'fetching';
+    render();
+    const aiRes = await fetch('/.netlify/functions/search',{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({query:`${brand} ${name}`.trim(), mode:'ingredients_only'})
+    });
+    const aiData = await aiRes.json();
+    state.scanResult = {found:true, product_name:name, brand:brand, product_type:'', ingredients:aiData.ingredients||'', confidence:aiData.confidence||'medium'};
+    state.scanStatus = state.scanResult.ingredients ? 'done' : 'partial';
+    state.scanMsg = state.scanResult.ingredients ? '' : 'Product found but ingredients not available — try Search by Name.';
+    render();
+  }
+
+  // 1. Open Beauty Facts
   try{
-    const obfRes = await fetch(`https://world.openbeautyfacts.org/api/v0/product/${encodeURIComponent(q.trim())}.json`);
-    const obfData = await obfRes.json();
-    if(obfData.status===1 && obfData.product){
-      const p = obfData.product;
-      const name = p.product_name||p.product_name_en||'';
-      const brand = p.brands||'';
-      const ings = p.ingredients_text||p.ingredients_text_en||'';
-      if(name){
-        if(ings){
-          state.scanResult = {found:true, product_name:name, brand:brand, product_type:'', ingredients:ings, confidence:'high'};
-          state.scanStatus = 'done';
-          render();
-          return;
-        } else {
-          // Have product name, fetch ingredients via AI
-          state.scanMsg = 'Product found — fetching ingredient list...';
-          state.scanStatus = 'fetching';
-          render();
-          const aiRes = await fetch('/.netlify/functions/search',{
-            method:'POST',
-            headers:{'Content-Type':'application/json'},
-            body:JSON.stringify({query: `${brand} ${name}`.trim(), mode:'ingredients_only'})
-          });
-          const aiData = await aiRes.json();
-          state.scanResult = {
-            found:true,
-            product_name:name,
-            brand:brand,
-            product_type:'',
-            ingredients:aiData.ingredients||'',
-            confidence:aiData.confidence||'medium'
-          };
-          state.scanStatus = state.scanResult.ingredients ? 'done' : 'partial';
-          state.scanMsg = state.scanResult.ingredients ? '' : 'Product found but ingredients not available — please paste them.';
-          render();
-          return;
-        }
-      }
+    const r = await fetch(`https://world.openbeautyfacts.org/api/v0/product/${encodeURIComponent(q.trim())}.json`);
+    const d = await r.json();
+    if(d.status===1 && d.product){
+      const p=d.product; const name=p.product_name||p.product_name_en||''; const brand=p.brands||''; const ings=p.ingredients_text||p.ingredients_text_en||'';
+      if(name){ if(ings){ state.scanResult={found:true,product_name:name,brand:brand,product_type:'',ingredients:ings,confidence:'high'}; state.scanStatus='done'; render(); return; } else { await fetchIngredientsByName(name,brand); return; } }
     }
   } catch(e){}
 
-  // Fallback to AI search with barcode as query
+  // 2. Open Food Facts (broader database)
+  try{
+    const r = await fetch(`https://world.openfoodfacts.org/api/v0/product/${encodeURIComponent(q.trim())}.json`);
+    const d = await r.json();
+    if(d.status===1 && d.product){
+      const p=d.product; const name=p.product_name||p.product_name_en||''; const brand=p.brands||''; const ings=p.ingredients_text||p.ingredients_text_en||'';
+      if(name){ if(ings){ state.scanResult={found:true,product_name:name,brand:brand,product_type:'',ingredients:ings,confidence:'high'}; state.scanStatus='done'; render(); return; } else { await fetchIngredientsByName(name,brand); return; } }
+    }
+  } catch(e){}
+
+  // 3. UPC Item DB
+  try{
+    const r = await fetch(`https://api.upcitemdb.com/prod/trial/lookup?upc=${encodeURIComponent(q.trim())}`);
+    const d = await r.json();
+    if(d.code==='OK' && d.items && d.items[0]){
+      const item=d.items[0]; const name=item.title||''; const brand=item.brand||'';
+      if(name){ await fetchIngredientsByName(name, brand); return; }
+    }
+  } catch(e){}
+
+  // 4. AI fallback — try to identify the product by barcode number
   try{
     const res = await fetch('/.netlify/functions/search',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({query:`barcode ${q.trim()}`, mode:'search'})
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({query:`hair product barcode ${q.trim()}`, mode:'search'})
     });
     const data = await res.json();
     if(data.found && data.product_name){
@@ -539,13 +586,12 @@ async function doBarcodeSearch(){
       state.scanStatus = data.ingredients ? 'done' : 'partial';
       state.scanMsg = data.ingredients ? '' : 'Product found but ingredients not available.';
     } else {
-      // Barcode not recognised — gently suggest name search, switch tab
       state.scanStatus = 'partial';
-      state.scanMsg = `Barcode not found in our database. Switch to "Search by Name" and type the product name to get your Crown Score.`;
+      state.scanMsg = `Barcode not found. Switch to "By Name" and type "${q.trim()}" or the product name to get your Crown Score.`;
     }
   } catch(e){
     state.scanStatus = 'partial';
-    state.scanMsg = 'Could not look up that barcode. Try switching to "Search by Name" instead.';
+    state.scanMsg = 'Could not look up that barcode. Try "By Name" instead.';
   }
   render();
 }
