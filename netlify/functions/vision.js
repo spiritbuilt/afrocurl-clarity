@@ -96,11 +96,11 @@ Return a JSON object with this exact structure:
 }
 
 Instructions:
-- ALWAYS try to read the product name and brand — even from marketing images, shop photos, or product shots where the label text is small
-- If you can see ANY ingredients, list ALL of them — do not truncate
-- If the ingredient list is partially obscured, include what you can see and note it
-- If you can read the product name but not the ingredients, set ingredients_found to false but STILL return product_name and brand — this is very important, we will search for ingredients by name
-- Only set product_name to empty string if you genuinely cannot read ANY text on the product at all
+- STEP 1: Read the product name and brand from ANY visible text on the product — front label, side, marketing image, doesn't matter. Even if the image is dark or angled, try hard.
+- STEP 2: Look for the ingredient list (usually on the back or side). If you find it, list ALL ingredients.
+- If you can read the product name but NOT the ingredients: set ingredients_found to false but ALWAYS return product_name and brand. This is critical — we use the name to look up ingredients automatically.
+- NEVER return an empty product_name if you can read any text on the product at all
+- If you can see a product but genuinely cannot read any text, describe what you see in the notes field
 - Common ingredient list indicators: "Ingredients:", "INCI:", "Contains:"
 - Return ONLY the JSON object, no other text`,
             },

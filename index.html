@@ -633,8 +633,15 @@ async function doPhotoScan(dataUrlOrArray, mimeType){
     const data = await res.json();
 
     if(data.error && !data.product_name && !data.brand){
-      // Genuinely nothing readable — try AI search with a generic prompt as last resort
-      state.scanMsg = 'Label unclear — try searching by name instead, or add a photo of the back of the label.';
+      state.scanMsg = 'Could not read the label. Try the Name Search tab — type what you can see on the front of the product.';
+      state.scanStatus = 'partial';
+      render();
+      return;
+    }
+
+    // If vision returned notes (AI saw something but couldn't name it), still try a search
+    if(!data.product_name && !data.brand && data.notes){
+      state.scanMsg = 'Label not fully readable. Add a clearer photo or use Name Search.';
       state.scanStatus = 'partial';
       render();
       return;
