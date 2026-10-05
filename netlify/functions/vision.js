@@ -37,9 +37,14 @@ exports.handler = async (event) => {
     };
   }
 
-  const { image, mediaType } = body;
+  const { image, mediaType, images } = body;
 
-  if (!image) {
+  // Support multiple images or single image
+  const imgArray = images && images.length
+    ? images
+    : image ? [{ data: image, mediaType: mediaType || "image/jpeg" }] : [];
+
+  if (!imgArray.length) {
     return {
       statusCode: 400,
       headers,
@@ -48,14 +53,19 @@ exports.handler = async (event) => {
   }
 
   const validTypes = ["image/jpeg", "image/png", "image/gif", "image/webp"];
-  const imgType = mediaType || "image/jpeg";
-  if (!validTypes.includes(imgType)) {
+
+  // Build image content blocks for all provided images
+  const imageBlocks = imgArray.map(img => {
+    const t = img.mediaType || "image/jpeg";
     return {
-      statusCode: 400,
-      headers,
-      body: JSON.stringify({ error: "Unsupported image type." }),
+      type: "image",
+      source: {
+        type: "base64",
+        media_type: validTypes.includes(t) ? t : "image/jpeg",
+        data: img.data,
+      },
     };
-  }
+  });
 
   try {
     const message = await client.messages.create({
@@ -65,17 +75,10 @@ exports.handler = async (event) => {
         {
           role: "user",
           content: [
-            {
-              type: "image",
-              source: {
-                type: "base64",
-                media_type: imgType,
-                data: image,
-              },
-            },
+            ...imageBlocks,
             {
               type: "text",
-              text: `You are an expert at reading hair product labels. Examine this image carefully.
+              text: `You are an expert at reading hair product labels. Examine ${imageBlocks.length > 1 ? 'all '+imageBlocks.length+' images — they show different sides of the same product' : 'this image'} carefully.
 
 Your job is to extract ALL ingredient information visible. Even if the text is small, tilted, partially in shadow, or curved around a bottle — do your best to read it.
 
