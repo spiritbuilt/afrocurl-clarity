@@ -78,9 +78,9 @@ exports.handler = async (event) => {
             ...imageBlocks,
             {
               type: "text",
-              text: `You are an expert at reading hair product labels. Examine ${imageBlocks.length > 1 ? 'all '+imageBlocks.length+' images — they show different sides of the same product' : 'this image'} carefully.
+              text: `You are an expert at reading hair product labels and identifying hair products. Examine ${imageBlocks.length > 1 ? 'all '+imageBlocks.length+' images — they show different sides of the same product' : 'this image'} carefully.
 
-Your job is to extract ALL ingredient information visible. Even if the text is small, tilted, partially in shadow, or curved around a bottle — do your best to read it.
+Your PRIMARY job is to identify the product and extract ingredients. Even if this is a marketing/shop photo rather than a direct label shot, extract whatever product information you can see.
 
 Return a JSON object with this exact structure:
 
@@ -96,10 +96,11 @@ Return a JSON object with this exact structure:
 }
 
 Instructions:
+- ALWAYS try to read the product name and brand — even from marketing images, shop photos, or product shots where the label text is small
 - If you can see ANY ingredients, list ALL of them — do not truncate
 - If the ingredient list is partially obscured, include what you can see and note it
-- If you can read the product name but not the ingredients, set ingredients_found to false but still return product_name
-- If the image is too blurry or dark to read anything useful, set both to empty strings
+- If you can read the product name but not the ingredients, set ingredients_found to false but STILL return product_name and brand — this is very important, we will search for ingredients by name
+- Only set product_name to empty string if you genuinely cannot read ANY text on the product at all
 - Common ingredient list indicators: "Ingredients:", "INCI:", "Contains:"
 - Return ONLY the JSON object, no other text`,
             },

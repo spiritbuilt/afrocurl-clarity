@@ -632,9 +632,10 @@ async function doPhotoScan(dataUrlOrArray, mimeType){
     });
     const data = await res.json();
 
-    if(data.error && !data.product_name){
-      state.scanStatus = 'error';
-      state.scanMsg = data.error;
+    if(data.error && !data.product_name && !data.brand){
+      // Genuinely nothing readable — try AI search with a generic prompt as last resort
+      state.scanMsg = 'Label unclear — try searching by name instead, or add a photo of the back of the label.';
+      state.scanStatus = 'partial';
       render();
       return;
     }
