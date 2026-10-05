@@ -594,8 +594,8 @@ async function doPhotoScan(dataUrl, mimeType){
       state.scanStatus = 'done';
       state.scanMsg = '';
       render();
-    } else if(data.product_name && data.should_auto_search){
-      // Got name but not ingredients — auto-search for them
+    } else if(data.product_name){
+      // Got name but not full ingredients — auto-search for them regardless of flag
       state.scanMsg = `Found "${data.product_name}" — fetching ingredient list...`;
       state.scanStatus = 'fetching';
       render();
