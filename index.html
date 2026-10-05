@@ -321,7 +321,7 @@ function renderLanding(){
         <div class="feature-item">
           <div class="feature-icon">👑</div>
           <div class="feature-label">Crown Score™</div>
-          <div class="feature-desc">Personalised 0–100 score based on your unique PETALS™ hair profile</div>
+          <div class="feature-desc">Personalised 0–100 score shaped around your unique hair profile</div>
         </div>
         <div class="feature-item">
           <div class="feature-icon">📋</div>
@@ -334,7 +334,7 @@ function renderLanding(){
         ${!state.profile ? `<div class="alert alert-info">👋 Start by building your <strong>Crown Profile</strong> — it takes 2 minutes and makes every scan personalised to you.<br/><br/><button class="btn-primary btn-sm" onclick="go('profile')">Build My Profile</button></div>` : ''}
         <div class="card">
           <div class="card-title">What is AfroCurl Clarity?</div>
-          <p style="font-size:14px;color:var(--text2);line-height:1.7">Powered by the <strong>PETALS™ Method</strong> — a structured framework built on hair science, not trends. Every Crown Score™ reflects how a product's ingredients interact with your porosity, elasticity, texture, pH sensitivity, length goals, and scalp health.</p>
+          <p style="font-size:14px;color:var(--text2);line-height:1.7">Powered by the <strong>PETALS™ Method</strong> — a structured framework built on hair science, not trends. Every Crown Score™ uses a personalised, multi-factor analysis to consider how a product may align with your current hair profile, needs and goals.</p>
           <div style="margin-top:12px;font-size:12px;color:var(--text2)">Built by <strong>The Afro Curly Hair Coach</strong> — 14+ years of textured hair expertise. <a href="https://www.theafrocurlyhaircoach.com" target="_blank">Learn more →</a></div>
         </div>
       </div>
@@ -649,248 +649,74 @@ function scoreManual(){
 }
 
 // ============================================================
-// INGREDIENT ENGINE
+// PROTECTED ANALYSIS CLIENT
 // ============================================================
-const INGREDIENT_DB = {
-  // HUMECTANTS
-  'glycerin':{name:'Glycerin',type:'humectant',petals:{porosity:1,elasticity:1,length:0,scalp:1},goodFor:['low','medium','high'],caution:[],effect:'Draws moisture into the hair shaft. Works best in humid environments.',fn:'Humectant'},
-  'glycerine':{name:'Glycerine',type:'humectant',petals:{porosity:1,elasticity:1,length:0,scalp:1},goodFor:['low','medium','high'],caution:[],effect:'Draws moisture into the hair shaft.',fn:'Humectant'},
-  'aloe vera':{name:'Aloe Vera',type:'humectant',petals:{porosity:1,elasticity:1,length:1,scalp:1},goodFor:['low','medium','high'],caution:[],effect:'Hydrates, soothes scalp, adds slip and shine.',fn:'Humectant'},
-  'aloe barbadensis leaf juice':{name:'Aloe Vera',type:'humectant',petals:{porosity:1,elasticity:1,length:1,scalp:1},goodFor:['low','medium','high'],caution:[],effect:'Hydrates, soothes scalp, adds slip.',fn:'Humectant'},
-  'panthenol':{name:'Panthenol (Pro-Vitamin B5)',type:'humectant',petals:{porosity:1,elasticity:2,length:1,scalp:1},goodFor:['low','medium','high'],caution:[],effect:'Penetrates the hair shaft, improves elasticity and moisture retention.',fn:'Humectant'},
-  'honey':{name:'Honey',type:'humectant',petals:{porosity:1,elasticity:1,length:0,scalp:0},goodFor:['medium','high'],caution:['low'],effect:'Strong humectant; can cause hygral fatigue in high porosity hair if overused.',fn:'Humectant'},
-  'sorbitol':{name:'Sorbitol',type:'humectant',petals:{porosity:1,elasticity:0,length:0,scalp:0},goodFor:['medium','high'],caution:[],effect:'Attracts and retains moisture.',fn:'Humectant'},
-  // FATTY ALCOHOLS
-  'cetyl alcohol':{name:'Cetyl Alcohol',type:'fatty_alcohol',petals:{porosity:1,elasticity:1,length:0,scalp:0},goodFor:['medium','high'],caution:['low'],effect:'Emollient and emulsifier. Can cause buildup on low porosity hair.',fn:'Fatty Alcohol'},
-  'cetearyl alcohol':{name:'Cetearyl Alcohol',type:'fatty_alcohol',petals:{porosity:1,elasticity:1,length:0,scalp:0},goodFor:['medium','high'],caution:['low'],effect:'Softens and conditions. Blend of cetyl and stearyl alcohols.',fn:'Fatty Alcohol'},
-  'stearyl alcohol':{name:'Stearyl Alcohol',type:'fatty_alcohol',petals:{porosity:1,elasticity:0,length:0,scalp:0},goodFor:['medium','high'],caution:['low'],effect:'Emollient. May build up on low porosity hair.',fn:'Fatty Alcohol'},
-  // PROTEINS
-  'hydrolyzed keratin':{name:'Hydrolysed Keratin',type:'protein',petals:{porosity:0,elasticity:2,length:1,scalp:0},goodFor:['high'],caution:['low'],effect:'Strengthens damaged hair. Can cause stiffness if hair is protein-sensitive.',fn:'Protein'},
-  'hydrolyzed wheat protein':{name:'Hydrolysed Wheat Protein',type:'protein',petals:{porosity:0,elasticity:2,length:1,scalp:0},goodFor:['high'],caution:['low'],effect:'Adds strength and body. Good for fine or damaged hair.',fn:'Protein'},
-  'hydrolyzed silk protein':{name:'Hydrolysed Silk Protein',type:'protein',petals:{porosity:0,elasticity:2,length:1,scalp:0},goodFor:['medium','high'],caution:[],effect:'Lightweight protein that adds shine and smoothness.',fn:'Protein'},
-  'hydrolyzed collagen':{name:'Hydrolysed Collagen',type:'protein',petals:{porosity:0,elasticity:2,length:1,scalp:0},goodFor:['high'],caution:['low'],effect:'Strengthens and improves elasticity.',fn:'Protein'},
-  // OILS
-  'coconut oil':{name:'Coconut Oil',type:'oil',petals:{porosity:1,elasticity:1,length:2,scalp:1},goodFor:['high'],caution:['low'],effect:'Penetrating oil. Can cause dryness on low porosity hair by blocking moisture.',fn:'Oil'},
-  'jamaican black castor oil':{name:'Jamaican Black Castor Oil',type:'oil',petals:{porosity:0,elasticity:0,length:2,scalp:2},goodFor:['medium','high'],caution:['fine'],effect:'Stimulates scalp circulation. Supports length retention.',fn:'Oil'},
-  'castor oil':{name:'Castor Oil',type:'oil',petals:{porosity:0,elasticity:0,length:2,scalp:2},goodFor:['medium','high'],caution:[],effect:'Thick oil supporting scalp health and length retention.',fn:'Oil'},
-  'argan oil':{name:'Argan Oil',type:'oil',petals:{porosity:1,elasticity:1,length:1,scalp:1},goodFor:['low','medium','high'],caution:[],effect:'Lightweight oil with antioxidants. Adds shine without heaviness.',fn:'Oil'},
-  'jojoba oil':{name:'Jojoba Oil',type:'oil',petals:{porosity:1,elasticity:1,length:1,scalp:2},goodFor:['low','medium','high'],caution:[],effect:'Most similar to scalp\'s natural sebum. Balances moisture.',fn:'Oil'},
-  'sweet almond oil':{name:'Sweet Almond Oil',type:'oil',petals:{porosity:1,elasticity:1,length:1,scalp:1},goodFor:['low','medium','high'],caution:[],effect:'Lightweight, nourishing. Good for all hair types.',fn:'Oil'},
-  'olive oil':{name:'Olive Oil',type:'oil',petals:{porosity:1,elasticity:1,length:1,scalp:1},goodFor:['medium','high'],caution:['low'],effect:'Rich, penetrating oil. Can feel heavy on fine or low porosity hair.',fn:'Oil'},
-  // BUTTERS
-  'shea butter':{name:'Shea Butter',type:'butter',petals:{porosity:0,elasticity:1,length:2,scalp:1},goodFor:['high'],caution:['low','fine'],effect:'Rich emollient. Seals moisture but can build up on low porosity hair.',fn:'Butter'},
-  'mango butter':{name:'Mango Butter',type:'butter',petals:{porosity:0,elasticity:1,length:1,scalp:0},goodFor:['medium','high'],caution:['low'],effect:'Rich, nourishing. Slightly lighter than shea.',fn:'Butter'},
-  'cocoa butter':{name:'Cocoa Butter',type:'butter',petals:{porosity:0,elasticity:1,length:1,scalp:0},goodFor:['high'],caution:['low','fine'],effect:'Very rich emollient. Best for coarse, dry or high porosity hair.',fn:'Butter'},
-  // SILICONES
-  'dimethicone':{name:'Dimethicone',type:'silicone',petals:{porosity:-1,elasticity:0,length:0,scalp:-1},goodFor:[],caution:['all'],effect:'Non-water-soluble silicone. Builds up and blocks moisture over time.',fn:'Silicone'},
-  'cyclomethicone':{name:'Cyclomethicone',type:'silicone',petals:{porosity:0,elasticity:0,length:0,scalp:0},goodFor:['low','medium','high'],caution:[],effect:'Evaporating silicone — lightweight and does not build up.',fn:'Silicone'},
-  'amodimethicone':{name:'Amodimethicone',type:'silicone',petals:{porosity:0,elasticity:0,length:0,scalp:0},goodFor:['low','medium'],caution:['high'],effect:'Water-soluble silicone that improves slip without major buildup.',fn:'Silicone'},
-  // SURFACTANTS / CLEANSERS
-  'sodium lauryl sulfate':{name:'Sodium Lauryl Sulfate (SLS)',type:'surfactant',petals:{porosity:-1,elasticity:-1,length:-1,scalp:-1},goodFor:[],caution:['all'],effect:'Harsh surfactant. Strips natural oils, causes dryness and irritation.',fn:'Surfactant'},
-  'sodium laureth sulfate':{name:'Sodium Laureth Sulfate (SLES)',type:'surfactant',petals:{porosity:-1,elasticity:0,length:-1,scalp:-1},goodFor:[],caution:['all'],effect:'Moderately harsh. Can cause dryness with frequent use.',fn:'Surfactant'},
-  'cocamidopropyl betaine':{name:'Cocamidopropyl Betaine',type:'surfactant',petals:{porosity:1,elasticity:0,length:0,scalp:1},goodFor:['low','medium','high'],caution:[],effect:'Gentle, conditioning surfactant. Often paired with sulphates to reduce harshness.',fn:'Surfactant'},
-  'sodium cocoyl isethionate':{name:'Sodium Cocoyl Isethionate',type:'surfactant',petals:{porosity:1,elasticity:0,length:0,scalp:1},goodFor:['low','medium','high'],caution:[],effect:'Very gentle, conditioning cleanser. Great for afro-textured hair.',fn:'Surfactant'},
-  // SCALP
-  'salicylic acid':{name:'Salicylic Acid',type:'scalp_active',petals:{porosity:0,elasticity:0,length:0,scalp:2},goodFor:['oily','flaking'],caution:[],effect:'Exfoliates scalp. Helps with flaking and product buildup.',fn:'Scalp Active'},
-  'tea tree oil':{name:'Tea Tree Oil',type:'scalp_active',petals:{porosity:0,elasticity:0,length:0,scalp:2},goodFor:['oily','sensitive'],caution:[],effect:'Antimicrobial. Soothes scalp irritation and reduces flaking.',fn:'Scalp Active'},
-  'zinc pyrithione':{name:'Zinc Pyrithione',type:'scalp_active',petals:{porosity:0,elasticity:0,length:0,scalp:2},goodFor:['flaking','oily'],caution:[],effect:'Anti-dandruff active. Reduces fungal growth on scalp.',fn:'Scalp Active'},
-  // OCCLUSIVES
-  'petrolatum':{name:'Petrolatum (Petroleum Jelly)',type:'occlusive',petals:{porosity:-1,elasticity:0,length:0,scalp:-1},goodFor:['high'],caution:['low','medium'],effect:'Seals moisture but blocks absorption. Best used sparingly on high porosity ends.',fn:'Occlusive'},
-  'mineral oil':{name:'Mineral Oil',type:'occlusive',petals:{porosity:-1,elasticity:0,length:0,scalp:-1},goodFor:['high'],caution:['low'],effect:'Occlusive. Prevents moisture absorption if applied before water-based products.',fn:'Occlusive'},
-  // PRESERVATIVES
-  'phenoxyethanol':{name:'Phenoxyethanol',type:'preservative',petals:{porosity:0,elasticity:0,length:0,scalp:0},goodFor:['low','medium','high'],caution:[],effect:'Common preservative. Generally well-tolerated.',fn:'Preservative'},
-  'sodium benzoate':{name:'Sodium Benzoate',type:'preservative',petals:{porosity:0,elasticity:0,length:0,scalp:0},goodFor:['low','medium','high'],caution:[],effect:'Preservative that maintains product safety and shelf life.',fn:'Preservative'},
-  // FRAGRANCE / SENSITISERS
-  'fragrance':{name:'Fragrance/Parfum',type:'sensitiser',petals:{porosity:0,elasticity:0,length:0,scalp:-1},goodFor:[],caution:['sensitive'],effect:'May cause scalp sensitivity or allergic reactions in some people.',fn:'Fragrance'},
-  'parfum':{name:'Parfum (Fragrance)',type:'sensitiser',petals:{porosity:0,elasticity:0,length:0,scalp:-1},goodFor:[],caution:['sensitive'],effect:'May irritate sensitive scalp. Often contains undisclosed compounds.',fn:'Fragrance'},
-};
-
-function parseIngredients(text){
-  if(!text) return [];
-  return text
-    .split(/[,;]+/)
-    .map(s=>s.trim())
-    .filter(s=>s.length>1 && s.length<80);
-}
-
-function matchIngredient(raw){
-  const lower = raw.toLowerCase().trim();
-  for(const key of Object.keys(INGREDIENT_DB)){
-    if(lower.includes(key) || key.includes(lower)) return {key, ...INGREDIENT_DB[key]};
-  }
-  return null;
-}
-
-function scoreIngredients(ingredientList, profile){
-  let total = 0, count = 0, recognised = 0;
-  const details = [];
-
-  for(const raw of ingredientList){
-    const match = matchIngredient(raw);
-    if(match){
-      recognised++;
-      let pts = 0;
-      const p = match.petals;
-      // Positive signals
-      if(p.porosity>0) pts += profile ? (profile.porosity==='high'?15:profile.porosity==='medium'?12:8) : 10;
-      if(p.elasticity>0) pts += 10;
-      if(p.length>0) pts += 8;
-      if(p.scalp>0) pts += 8;
-      if(p.elasticity===2) pts += 5;
-      if(p.length===2) pts += 5;
-      if(p.scalp===2) pts += 5;
-      // Negative signals
-      if(p.porosity<0) pts -= 20;
-      if(p.scalp<0) pts -= 15;
-      // Caution for profile
-      if(profile && match.caution){
-        if(match.caution.includes('all') || match.caution.includes(profile.porosity)) pts -= 18;
-        if(match.caution.includes('sensitive') && profile.scalp && profile.scalp.includes('Sensitive')) pts -= 10;
-      }
-      total += pts;
-      count++;
-      details.push({raw, match, pts});
-    } else {
-      details.push({raw, match:null, pts:0});
-    }
-  }
-
-  if(count===0) return {score:50, confidence:'low', details, recognised:0};
-  const rawScore = 50 + (total / count);
-  const score = Math.max(0, Math.min(100, Math.round(rawScore)));
-  const confidence = recognised < 3 ? 'low' : recognised < 8 ? 'medium' : 'high';
-  return {score, confidence, details, recognised};
-}
-
 function scoreTier(s){
-  if(s>=85) return {tier:'Sovereign Approved',color:'#1a7a4a',bg:'#e6f9f0',desc:'Highly aligned with your hair profile.'};
-  if(s>=65) return {tier:'Supportive Choice',color:'#2d3a8c',bg:'#e8eeff',desc:'Generally beneficial with minor considerations.'};
-  if(s>=40) return {tier:'Mixed Balance',color:'#7a5c1a',bg:'#fff8e6',desc:'Contains both supportive and conflicting ingredients.'};
-  return {tier:'Reactive Risk',color:'#7a1a2a',bg:'#ffeef0',desc:'Likely to disrupt moisture or protein balance.'};
+  if(s>=85) return {tier:'Excellent Match',color:'#1a7a4a',bg:'#e6f9f0',desc:'Highly aligned with your current hair profile.'};
+  if(s>=65) return {tier:'Good Match',color:'#2d3a8c',bg:'#e8eeff',desc:'Generally supportive, with some considerations depending on how you use it.'};
+  if(s>=40) return {tier:'Use with Awareness',color:'#7a5c1a',bg:'#fff8e6',desc:'A mixed fit. Some ingredients may support your hair while others may need more mindful use.'};
+  return {tier:'Poor Match',color:'#7a1a2a',bg:'#ffeef0',desc:'This formulation may be less aligned with your current hair profile and needs.'};
 }
 
-// ============================================================
-// RESULT SCREEN
-// ============================================================
+async function requestCrownAnalysis(){
+  if(!state.scanResult||!state.scanResult.ingredients) return false;
+  state.scanStatus='scanning'; state.scanMsg='Analysing this product against your Crown Profile...'; render();
+  try{
+    const res=await fetch('/.netlify/functions/score',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ingredients:state.scanResult.ingredients,profile:state.profile})});
+    const data=await res.json();
+    if(!res.ok||data.error) throw new Error(data.error||'Analysis failed');
+    state.scoreAnalysis=data; state.scanStatus=null; state.screen='result'; render(); return true;
+  }catch(e){
+    state.scanStatus='error'; state.scanMsg='We could not complete the Crown Score right now. Please try again.'; state.screen='scanner'; render(); return false;
+  }
+}
+
+async function scoreCurrent(){ return requestCrownAnalysis(); }
+async function scoreManual(){
+  const manual=(document.getElementById('manualIngredients')||{}).value||'';
+  if(!manual.trim()) return;
+  if(!state.scanResult) state.scanResult={product_name:'Unknown Product',brand:''};
+  state.scanResult.ingredients=manual.trim();
+  return requestCrownAnalysis();
+}
+
 function renderResult(){
   if(!state.scanResult||!state.scanResult.ingredients) return renderScanner();
-  const r = state.scanResult;
-  const profile = state.profile;
-  const ingList = parseIngredients(r.ingredients);
-  const {score, confidence, details, recognised} = scoreIngredients(ingList, profile);
-  const tier = scoreTier(score);
-
-  // PETALS breakdown
-  const petals = {P:{label:'Porosity',score:0,note:''},E:{label:'Elasticity',score:0,note:''},T:{label:'Texture',score:0,note:''},A:{label:'Scalp/pH',score:0,note:''},L:{label:'Length',score:0,note:''},S:{label:'Scalp Health',score:0,note:''}};
-  for(const d of details){
-    if(d.match){
-      petals.P.score += d.match.petals.porosity||0;
-      petals.E.score += d.match.petals.elasticity||0;
-      petals.L.score += d.match.petals.length||0;
-      petals.S.score += d.match.petals.scalp||0;
-    }
-  }
-  const petalMax = 5;
-  const petalKeys = ['P','E','L','S'];
-  const petalNotes = {
-    P: petals.P.score>0?'Moisture-supportive ingredients detected':'Watch for moisture-blocking ingredients',
-    E: petals.E.score>0?'Elasticity-supporting proteins or humectants present':'Limited elasticity support detected',
-    L: petals.L.score>0?'Length-retention supportive':'Neutral for length retention',
-    S: petals.S.score>0?'Scalp-supportive ingredients present':'Neutral for scalp health',
-  };
-
-  // Ingredient chips
-  const goodIngs = details.filter(d=>d.match && d.pts>5).slice(0,10);
-  const cautionIngs = details.filter(d=>d.match && d.pts<0).slice(0,6);
-  const unknownCount = details.filter(d=>!d.match).length;
-
-  const saveId = Date.now().toString();
-
+  if(!state.scoreAnalysis){ requestCrownAnalysis(); return renderScanner(); }
+  const r=state.scanResult, a=state.scoreAnalysis, tier=scoreTier(a.score);
+  const supportive=Array.isArray(a.supportive)?a.supportive:[];
+  const caution=Array.isArray(a.caution)?a.caution:[];
+  const factors=Array.isArray(a.factors)?a.factors:[];
   return `
     ${navHTML('scanner')}
     <div class="page">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
-        <button onclick="go('scanner')" style="color:var(--text2);font-size:13px">← Back</button>
-        <div style="font-weight:600;font-size:15px;flex:1">${r.product_name}</div>
+        <button onclick="state.scoreAnalysis=null;go('scanner')" style="color:var(--text2);font-size:13px">← Back</button>
+        <div style="font-weight:600;font-size:15px;flex:1">${r.product_name||'Product analysis'}</div>
         <div style="font-size:12px;color:var(--mauve)">${r.brand||''}</div>
       </div>
-
       <div class="card" style="border-color:${tier.color};text-align:center">
-        <div class="score-ring-wrap">
-          <div class="score-circle" style="background:${tier.bg};color:${tier.color}">
-            <div class="score-number">${score}</div>
-            <div class="score-label">Crown Score™</div>
-          </div>
-        </div>
-        <div class="score-tier" style="color:${tier.color}">👑 ${tier.tier}</div>
-        <div style="font-size:13px;color:var(--text2);margin-top:8px">${tier.desc}</div>
-        <div style="font-size:12px;color:var(--text2);margin-top:6px">Confidence: ${confidence} · ${recognised} of ${ingList.length} ingredients recognised</div>
-        ${!profile ? `<div class="alert alert-info" style="margin-top:14px;text-align:left">👤 <strong>This is a general score.</strong> Build your Crown Profile to get a personalised score based on your exact hair type. <button class="btn-primary btn-sm" style="margin-top:8px" onclick="go('profile')">Build Profile</button></div>` : ''}
+        <div class="score-ring-wrap"><div class="score-circle" style="background:${tier.bg};color:${tier.color}"><div class="score-number">${a.score}</div><div class="score-label">Crown Score™</div></div></div>
+        <div class="score-tier" style="color:${tier.color}">👑 ${a.tier||tier.tier}</div>
+        <div style="font-size:13px;color:var(--text2);margin-top:8px">${a.summary||tier.desc}</div>
+        <div style="font-size:12px;color:var(--text2);margin-top:6px">Confidence: ${a.confidence} · ${a.recognised} of ${a.totalIngredients} ingredients recognised</div>
+        ${!state.profile?'<div class="alert alert-info" style="margin-top:14px;text-align:left">👤 <strong>This is a general score.</strong> Build your Crown Profile for an analysis shaped around your hair characteristics and needs.</div>':''}
       </div>
-
-      <div class="card">
-        <div class="card-title">PETALS™ Breakdown</div>
-        <div class="petals-grid">
-          ${['P','E','L','S'].map(k=>{
-            const raw = petals[k].score;
-            const pct = Math.max(0,Math.min(100, 50 + (raw * 12)));
-            return `<div class="petal-card">
-              <div class="petal-label">${petals[k].label}</div>
-              <div class="petal-bar-wrap"><div class="petal-bar" style="width:${pct}%"></div></div>
-              <div class="petal-note">${petalNotes[k]}</div>
-            </div>`;
-          }).join('')}
-        </div>
-      </div>
-
-      ${goodIngs.length ? `<div class="card">
-        <div class="card-title">✅ Supportive Ingredients</div>
-        <div class="ingredient-list">
-          ${goodIngs.map(d=>`<span class="ing-chip ing-good" title="${d.match.effect}">${d.match.name}</span>`).join('')}
-        </div>
-      </div>` : ''}
-
-      ${cautionIngs.length ? `<div class="card">
-        <div class="card-title">⚠️ Ingredients to Watch</div>
-        <div class="ingredient-list">
-          ${cautionIngs.map(d=>`<span class="ing-chip ing-caution" title="${d.match.effect}">${d.match.name}</span>`).join('')}
-        </div>
-        ${cautionIngs.some(d=>d.match.type==='silicone') ? '<div class="alert alert-warn" style="margin-top:10px">This product contains silicones. Ensure you are using a clarifying shampoo regularly to prevent buildup.</div>' : ''}
-        ${cautionIngs.some(d=>d.match.name.includes('SLS')) ? '<div class="alert alert-warn" style="margin-top:10px">Contains SLS — a harsh surfactant that can strip natural oils. Use with a deep conditioner to prevent dryness.</div>' : ''}
-      </div>` : ''}
-
-      ${unknownCount > 0 ? `<div class="card">
-        <div class="card-title" style="font-size:13px">🔬 ${unknownCount} ingredient${unknownCount>1?'s':''} not in our database</div>
-        <div style="font-size:12px;color:var(--text2)">These may be newer or niche ingredients. The score reflects the ${recognised} we recognised.</div>
-      </div>` : ''}
-
-      <div style="display:flex;gap:10px;margin-top:8px;flex-wrap:wrap">
-        <button class="btn-primary" style="flex:1;justify-content:center" onclick="saveToPlannerFromResult('${saveId}')">💾 Save to Planner</button>
-        <button class="btn-outline" style="flex:1;color:var(--indigo);border-color:var(--indigo)" onclick="go('scanner')">Scan Another</button>
-      </div>
+      ${factors.length?`<div class="card"><div class="card-title">Why this score?</div><div style="font-size:13px;color:var(--text2);line-height:1.7">This Crown Score™ reflects how the formulation aligns with your current profile. Key factors included:</div><ul style="margin:10px 0 0 20px;font-size:13px;color:var(--text2);line-height:1.7">${factors.map(x=>`<li>${x}</li>`).join('')}</ul></div>`:''}
+      ${supportive.length?`<div class="card"><div class="card-title">✅ Supportive Ingredients</div><div class="ingredient-list">${supportive.map(x=>`<span class="ing-chip ing-good" title="${x.effect||''}">${x.name}</span>`).join('')}</div></div>`:''}
+      ${caution.length?`<div class="card"><div class="card-title">⚠️ Ingredients to Use with Awareness</div><div class="ingredient-list">${caution.map(x=>`<span class="ing-chip ing-caution" title="${x.effect||''}">${x.name}</span>`).join('')}</div><div style="font-size:12px;color:var(--text2);margin-top:10px">These are not automatically “bad” ingredients. Their suitability depends on your profile, the full formulation, how much is present, and how often the product is used.</div></div>`:''}
+      ${a.unknownCount>0?`<div class="card"><div class="card-title" style="font-size:13px">🔬 ${a.unknownCount} ingredient${a.unknownCount>1?'s':''} not fully interpreted</div><div style="font-size:12px;color:var(--text2)">The score is based on the ingredients the current analysis could meaningfully interpret. Formulation concentrations are not known from an ingredient list alone.</div></div>`:''}
+      <div class="alert alert-info">AfroCurl Clarity™ is an educational decision-support tool, not a medical or dermatological diagnosis. Your real-world hair response still matters.</div>
+      <div style="display:flex;gap:10px;margin-top:8px;flex-wrap:wrap"><button class="btn-primary" style="flex:1;justify-content:center" onclick="saveToPlannerFromResult()">💾 Save to Planner</button><button class="btn-outline" style="flex:1;color:var(--indigo);border-color:var(--indigo)" onclick="state.scoreAnalysis=null;go('scanner')">Scan Another</button></div>
     </div>
     ${renderFooter()}`;
 }
 
-function saveToPlannerFromResult(id){
-  if(!state.scanResult) return;
-  const r = state.scanResult;
-  const ingList = parseIngredients(r.ingredients);
-  const {score} = scoreIngredients(ingList, state.profile);
-  const exists = state.plannerItems.find(p=>p.product_name===r.product_name && p.brand===r.brand);
-  if(!exists){
-    state.plannerItems.unshift({
-      id: Date.now().toString(),
-      product_name: r.product_name,
-      brand: r.brand||'',
-      product_type: r.product_type||'',
-      ingredients: r.ingredients,
-      score: score,
-      date: new Date().toLocaleDateString('en-GB'),
-      notes: '',
-    });
-    savePlanner();
-  }
+function saveToPlannerFromResult(){
+  if(!state.scanResult||!state.scoreAnalysis) return;
+  const r=state.scanResult, score=state.scoreAnalysis.score;
+  const exists=state.plannerItems.find(p=>p.product_name===r.product_name&&p.brand===r.brand);
+  if(!exists){state.plannerItems.unshift({id:Date.now().toString(),product_name:r.product_name,brand:r.brand||'',product_type:r.product_type||'',ingredients:r.ingredients,score,date:new Date().toLocaleDateString('en-GB')});savePlanner();}
   go('planner');
 }
 
@@ -1171,10 +997,10 @@ function renderBadges(){
 // GLOSSARY
 // ============================================================
 const GLOSSARY = [
-  {term:'Porosity',def:'How easily your hair absorbs and retains moisture. Low porosity = tight cuticles, slow to absorb. High porosity = open cuticles, absorbs fast but loses moisture quickly.',tags:['PETALS™','Foundation']},
+  {term:'Porosity',def:'How easily your hair absorbs and retains moisture. Low porosity = tight cuticles, slow to absorb. High porosity = open cuticles, absorbs fast but loses moisture quickly.',tags:['Hair Profile','Foundation']},
   {term:'Elasticity',def:'How far your hair can stretch before breaking, and whether it returns to normal. Good elasticity means strong, healthy hair.',tags:['PETALS™','Foundation']},
-  {term:'PETALS™ Method',def:'Porosity, Elasticity, Texture, Acidity/pH, Length Retention, Scalp Health — the six-dimension framework powering every Crown Score™.',tags:['Framework']},
-  {term:'Crown Score™',def:'Your personalised product score from 0–100. Calculated using PETALS™ logic against the product\'s full ingredient list.',tags:['Scoring']},
+  {term:'PETALS™ Method',def:'The proprietary multi-factor method developed by The Afro Curly Hair Coach and used to support personalised Crown Score™ analysis.',tags:['Framework']},
+  {term:'Crown Score™',def:'A personalised 0–100 indicator designed to show how well a product may align with your current hair profile and needs.',tags:['Scoring']},
   {term:'Humectant',def:'Ingredients that attract and hold moisture from the air into the hair shaft. Examples: Glycerin, Panthenol, Aloe Vera.',tags:['Ingredient Type']},
   {term:'Emollient',def:'Ingredients that soften and smooth hair by filling gaps in the cuticle. Examples: Fatty alcohols, plant oils.',tags:['Ingredient Type']},
   {term:'Occlusive',def:'Ingredients that seal moisture in by forming a barrier. Examples: Petrolatum, Shea Butter, Mineral Oil.',tags:['Ingredient Type']},
@@ -1187,8 +1013,8 @@ const GLOSSARY = [
   {term:'Hygral Fatigue',def:'Damage caused by the hair swelling and shrinking repeatedly from water absorption. Common in high porosity hair with too many humectants.',tags:['Concern']},
   {term:'Protein-Moisture Balance',def:'Hair needs both protein (for strength) and moisture (for flexibility). Too much protein = brittle. Too much moisture = mushy.',tags:['Foundation']},
   {term:'INCI Name',def:'International Nomenclature of Cosmetic Ingredients — the standardised scientific names used on ingredient labels worldwide.',tags:['Labels']},
-  {term:'pH Balance',def:'Hair\'s natural pH is 4.5–5.5 (slightly acidic). Products that are too alkaline raise the cuticle; too acidic can close it too tightly.',tags:['PETALS™','Science']},
-  {term:'Scalp Health',def:'The condition of the skin on your scalp — affects hair growth, product tolerance, and moisture levels. Part of the S in PETALS™.',tags:['PETALS™']},
+  {term:'pH Balance',def:'Hair\'s natural pH is 4.5–5.5 (slightly acidic). Products that are too alkaline raise the cuticle; too acidic can close it too tightly.',tags:['Hair Profile','Science']},
+  {term:'Scalp Health',def:'The condition of the skin on your scalp — affects hair growth, product tolerance, and moisture levels. One of the factors considered within personalised hair and ingredient analysis.',tags:['Hair Profile']},
 ];
 
 function renderGlossary(){
