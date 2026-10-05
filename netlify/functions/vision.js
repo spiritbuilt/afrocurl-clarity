@@ -1,79 +1,168 @@
+// AfroCurl Clarity — Vision Label Scanner
+// Reads a product label photo and extracts product name + full ingredient list.
+// Returns everything needed to score the product immediately.
+
+const Anthropic = require("@anthropic-ai/sdk");
+
+const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
 exports.handler = async (event) => {
+  const headers = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Content-Type": "application/json",
+  };
+
+  if (event.httpMethod === "OPTIONS") {
+    return { statusCode: 200, headers, body: "" };
+  }
+
   if (event.httpMethod !== "POST") {
-    return { statusCode: 405, body: JSON.stringify({ error: "Method not allowed" }) };
+    return {
+      statusCode: 405,
+      headers,
+      body: JSON.stringify({ error: "Method not allowed" }),
+    };
   }
 
-  const { image_base64, media_type } = JSON.parse(event.body || "{}");
-  if (!image_base64) {
-    return { statusCode: 400, body: JSON.stringify({ error: "No image provided" }) };
+  let body;
+  try {
+    body = JSON.parse(event.body);
+  } catch {
+    return {
+      statusCode: 400,
+      headers,
+      body: JSON.stringify({ error: "Invalid request body." }),
+    };
   }
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    return { statusCode: 500, body: JSON.stringify({ error: "API key not configured" }) };
+  const { image, mediaType } = body;
+
+  if (!image) {
+    return {
+      statusCode: 400,
+      headers,
+      body: JSON.stringify({ error: "No image data provided." }),
+    };
+  }
+
+  const validTypes = ["image/jpeg", "image/png", "image/gif", "image/webp"];
+  const imgType = mediaType || "image/jpeg";
+  if (!validTypes.includes(imgType)) {
+    return {
+      statusCode: 400,
+      headers,
+      body: JSON.stringify({ error: "Unsupported image type." }),
+    };
   }
 
   try {
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01"
-      },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-6",
-        max_tokens: 1000,
-        messages: [{
+    const message = await client.messages.create({
+      model: "claude-opus-4-5",
+      max_tokens: 2000,
+      messages: [
+        {
           role: "user",
           content: [
             {
               type: "image",
               source: {
                 type: "base64",
-                media_type: media_type || "image/jpeg",
-                data: image_base64
-              }
+                media_type: imgType,
+                data: image,
+              },
             },
             {
               type: "text",
-              text: `Extract the ingredients list from this hair product label image.
+              text: `You are an expert at reading hair product labels. Examine this image carefully.
 
-Return ONLY a JSON object in this exact format, no other text:
+Your job is to extract ALL ingredient information visible. Even if the text is small, tilted, partially in shadow, or curved around a bottle — do your best to read it.
+
+Return a JSON object with this exact structure:
+
 {
-  "product_name": "product name if visible, otherwise empty string",
-  "brand": "brand name if visible, otherwise empty string", 
-  "ingredients": "full comma-separated ingredient list exactly as shown on label",
-  "found": true
+  "product_name": "full product name from the label",
+  "brand": "brand name",
+  "product_type": "e.g. conditioner, gel, shampoo, curl cream",
+  "ingredients": "the FULL ingredient list exactly as written on the label, comma-separated",
+  "ingredients_found": true or false,
+  "label_quality": "clear", "partial", or "unclear",
+  "confidence": "high", "medium", or "low",
+  "notes": "any notes about what you could or couldn't read clearly"
 }
 
-If no ingredient list is visible in the image, return:
-{
-  "found": false,
-  "product_name": "",
-  "brand": "",
-  "ingredients": ""
-}
-
-Return ONLY the JSON. No explanation, no markdown, no backticks.`
-            }
-          ]
-        }]
-      })
+Instructions:
+- If you can see ANY ingredients, list ALL of them — do not truncate
+- If the ingredient list is partially obscured, include what you can see and note it
+- If you can read the product name but not the ingredients, set ingredients_found to false but still return product_name
+- If the image is too blurry or dark to read anything useful, set both to empty strings
+- Common ingredient list indicators: "Ingredients:", "INCI:", "Contains:"
+- Return ONLY the JSON object, no other text`,
+            },
+          ],
+        },
+      ],
     });
 
-    const data = await response.json();
+    const responseText = message.content[0].text.trim();
+
+    let parsed;
+    try {
+      const cleaned = responseText
+        .replace(/^```json\s*/i, "")
+        .replace(/^```\s*/i, "")
+        .replace(/\s*```$/i, "")
+        .trim();
+      parsed = JSON.parse(cleaned);
+    } catch {
+      // If we got text but can't parse JSON, try to salvage something
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({
+          product_name: "",
+          brand: "",
+          ingredients: "",
+          ingredients_found: false,
+          label_quality: "unclear",
+          confidence: "low",
+          notes: "Could not parse label response",
+        }),
+      };
+    }
+
+    // If we got a product name but no ingredients from the photo,
+    // flag it so the frontend can auto-search for ingredients by name
+    if (parsed.product_name && !parsed.ingredients_found) {
+      parsed.should_auto_search = true;
+    }
+
     return {
       statusCode: 200,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data)
+      headers,
+      body: JSON.stringify(parsed),
     };
-
   } catch (err) {
-    console.error("Vision error:", err);
+    console.error("Vision function error:", err);
+
+    if (err.status === 401) {
+      return {
+        statusCode: 500,
+        headers,
+        body: JSON.stringify({
+          error: "API authentication failed. Check ANTHROPIC_API_KEY.",
+        }),
+      };
+    }
+
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: "Vision scan failed" })
+      headers,
+      body: JSON.stringify({
+        error: "Label scan failed. Please try again or search by name.",
+        details: err.message,
+      }),
     };
   }
 };
