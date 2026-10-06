@@ -127,6 +127,7 @@ label{display:block;font-size:13px;font-weight:500;color:var(--text2);margin-bot
 .scan-status.error{background:#ffeef0;border:1.5px solid #ef9a9a;color:#7a1a2a}
 .spinner{width:18px;height:18px;border:2.5px solid rgba(0,0,0,.15);border-top-color:currentColor;border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0}
 @keyframes spin{to{transform:rotate(360deg)}}
+@keyframes scanline{0%,100%{top:20%}50%{top:75%}}
 
 /* PHOTO */
 .photo-zone{border:2px dashed var(--border);border-radius:var(--radius);padding:32px 20px;text-align:center;cursor:pointer;transition:all .2s;margin-bottom:16px}
@@ -371,31 +372,36 @@ function renderScanner(){
       </div>
       <div id="barcodeCameraWrap" style="display:none;margin-top:12px;position:relative">
         <video id="barcodeVideo" style="width:100%;border-radius:10px;background:#000" playsinline autoplay></video>
-        <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:70%;height:2px;background:var(--mauve);opacity:.7;pointer-events:none"></div>
-        <button class="btn-outline btn-sm" style="margin-top:8px;color:var(--text2);border-color:var(--border)" onclick="stopBarcodeCamera()">Cancel</button>
+        <div id="barcodeScanLine" style="position:absolute;top:30%;left:10%;width:80%;height:3px;background:var(--mauve);box-shadow:0 0 8px var(--mauve);pointer-events:none;animation:scanline 1.8s ease-in-out infinite"></div>
+        <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#fff;font-size:12px;font-weight:600;text-shadow:0 1px 4px #000;pointer-events:none;background:rgba(0,0,0,.45);padding:4px 10px;border-radius:8px">Scanning for barcode...</div>
+        <button class="btn-outline btn-sm" style="margin-top:8px;color:var(--text2);border-color:var(--border)" onclick="stopBarcodeCamera()">✕ Cancel</button>
       </div>
-      <div class="form-hint">Point camera at barcode or type the number from the packaging</div>`;
+      <div class="form-hint">Point camera at barcode — it scans automatically · or type the number</div>`;
   } else {
+    const hasPhotos = state.photoDataUrls && state.photoDataUrls.length;
+    const isScanning = state.scanStatus === 'scanning' || state.scanStatus === 'fetching';
     tabContent = `
-      <div class="photo-zone" id="photoZone" onclick="triggerPhotoInput()">
-        ${state.photoDataUrls && state.photoDataUrls.length
+      <div class="photo-zone" id="photoZone" ${!hasPhotos ? 'onclick="triggerPhotoCapture()"' : ''} style="${!hasPhotos?'cursor:pointer':''}">
+        ${hasPhotos
           ? `<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">
               ${state.photoDataUrls.map((u,i)=>`<img src="${u}" alt="Label photo ${i+1}" style="max-height:160px;max-width:45%;border-radius:8px;object-fit:cover"/>`).join('')}
              </div>
-             <div style="font-size:13px;color:var(--text2);margin-top:8px">${state.scanStatus==='scanning'?'Scanning with AI...':state.photoDataUrls.length+' photo(s) ready'}</div>
-             ${state.scanStatus!=='scanning'?`<button class="btn-outline btn-sm" style="margin-top:8px;color:var(--indigo);border-color:var(--indigo)" onclick="triggerPhotoInput()">+ Add another photo (e.g. back of label)</button>`:''}
+             <div style="font-size:13px;color:var(--text2);margin-top:8px">${state.photoDataUrls.length} photo(s) ready</div>
+             ${!isScanning?`<button class="btn-outline btn-sm" style="margin-top:8px;color:var(--indigo);border-color:var(--indigo)" onclick="event.stopPropagation();triggerPhotoCapture()">+ Add another photo</button>`:''}
             `
           : `<div style="font-size:40px;margin-bottom:8px">📷</div>
-             <div style="font-weight:600;font-size:14px;margin-bottom:6px">Photograph the ingredients label</div>
-             <div style="font-size:13px;color:var(--text2)">Good lighting · all text visible · no shadows</div>`}
+             <div style="font-weight:600;font-size:14px;margin-bottom:6px">Photograph the product</div>
+             <div style="font-size:13px;color:var(--text2)">Front label or ingredients — AI works out the rest</div>
+             <div style="font-size:12px;color:var(--text2);margin-top:6px">Tap here or use the buttons below</div>`}
       </div>
       <div class="photo-btns">
         <button class="btn-primary" onclick="triggerPhotoCapture()">📸 Take Photo</button>
         <button class="btn-outline" style="color:var(--indigo);border-color:var(--indigo)" onclick="triggerPhotoInput()">🖼️ Upload Image</button>
+        ${hasPhotos && !isScanning ? `<button class="btn-primary" style="background:var(--teal);border-color:var(--teal)" onclick="doPhotoScan(state.photoDataUrls,'image/jpeg')">✨ Analyse Label</button>` : ''}
       </div>
       <input type="file" id="photoFileInput" accept="image/*" style="display:none" onchange="handlePhotoFile(this)"/>
       <input type="file" id="photoCaptureInput" accept="image/*" capture="environment" style="display:none" onchange="handlePhotoFile(this)"/>
-      <div class="form-hint" style="margin-top:12px">AI reads the label directly — no typing needed</div>`;
+      <div class="form-hint" style="margin-top:12px">No typing needed — AI reads the product and finds the ingredients</div>`;
   }
 
   let statusBlock = '';
@@ -621,16 +627,17 @@ function handlePhotoFile(input){
   if(!file) return;
   const reader = new FileReader();
   reader.onload = async (e) => {
-    // Compress before storing and sending
+    // Compress before storing
     const compressed = await compressImage(e.target.result);
     state.photoDataUrl = compressed;
     if(!state.photoDataUrls) state.photoDataUrls = [];
     state.photoDataUrls.push(compressed);
-    state.scanStatus = 'scanning';
-    state.scanMsg = state.photoDataUrls.length > 1 ? 'Reading both sides of the label...' : 'Reading your label with AI...';
+    state.scanStatus = null; // wait for user to press Analyse
+    state.scanMsg = '';
     state.scanResult = null;
     render();
-    await doPhotoScan(state.photoDataUrls, 'image/jpeg');
+    // Reset file input so same file can be re-selected
+    input.value = '';
   };
   reader.readAsDataURL(file);
 }
