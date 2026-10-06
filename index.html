@@ -599,19 +599,38 @@ async function doBarcodeSearch(){
 function triggerPhotoInput(){ document.getElementById('photoFileInput').click(); }
 function triggerPhotoCapture(){ document.getElementById('photoCaptureInput').click(); }
 
+// Compress image to max ~800px on longest side, quality 0.82, returns dataURL
+function compressImage(dataUrl, maxPx=800, quality=0.82){
+  return new Promise(resolve=>{
+    const img = new Image();
+    img.onload = ()=>{
+      const ratio = Math.min(maxPx/img.width, maxPx/img.height, 1);
+      const w = Math.round(img.width*ratio);
+      const h = Math.round(img.height*ratio);
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img,0,0,w,h);
+      resolve(canvas.toDataURL('image/jpeg', quality));
+    };
+    img.src = dataUrl;
+  });
+}
+
 function handlePhotoFile(input){
   const file = input.files[0];
   if(!file) return;
   const reader = new FileReader();
   reader.onload = async (e) => {
-    state.photoDataUrl = e.target.result;
+    // Compress before storing and sending
+    const compressed = await compressImage(e.target.result);
+    state.photoDataUrl = compressed;
     if(!state.photoDataUrls) state.photoDataUrls = [];
-    state.photoDataUrls.push(e.target.result);
+    state.photoDataUrls.push(compressed);
     state.scanStatus = 'scanning';
     state.scanMsg = state.photoDataUrls.length > 1 ? 'Reading both sides of the label...' : 'Reading your label with AI...';
     state.scanResult = null;
     render();
-    await doPhotoScan(state.photoDataUrls, file.type);
+    await doPhotoScan(state.photoDataUrls, 'image/jpeg');
   };
   reader.readAsDataURL(file);
 }
